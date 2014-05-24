@@ -178,19 +178,22 @@ class VatawareUpdateCommand extends Command {
 		unset($user);
 	}
 
-	function proximity($latitude, $longitude, $expects = null, $range = 20) {
+	function proximity($latitude, $longitude, $expects = null, $range = 25) {
 		if(empty($latitude) || empty($longitude)) return null;
 
 		if ($expects) {
 
 			$arrival_apt = Airport::select('lat', 'lon')->where('icao', $expects)->first();
-			$dtg = acos(sin(deg2rad($latitude)) * sin(deg2rad($arrival_apt->lat)) + cos(deg2rad($latitude)) * cos(deg2rad($arrival_apt->lat)) * cos(deg2rad($longitutde) - deg2rad($arrival_apt->lon))) * 6371;
+			if (!is_null($arrival_apt)) {
+				$dtg = acos(sin(deg2rad($latitude)) * sin(deg2rad($arrival_apt->lat)) + cos(deg2rad($latitude)) * cos(deg2rad($arrival_apt->lat)) * cos(deg2rad($longitude) - deg2rad($arrival_apt->lon))) * 6371;
 
-			if(!is_null($arrival_apt) && ($dtg <= $range)) {
-				return $arrival_apt;
-			} else {
-				return null;
+				if(($dtg <= $range)) {
+					return $arrival_apt;
+				}
 			}
+			
+			return null;
+
 		} else {
 			// For controllers or actual proximity
 			return Airport::select(DB::raw('*'), DB::raw("acos(sin(radians(`lat`)) * sin(radians(" . $latitude . ")) + cos(radians(`lat`)) * cos(radians(" . $latitude . ")) * cos(radians(`lon`) - radians(" . $longitude . "))) * 6371 AS distance"))
@@ -814,8 +817,14 @@ class VatawareUpdateCommand extends Command {
 		if(empty($code)) return '';
 
 		// Get the aircraft code (between slashes)
-		preg_match('/(?:.\/)?([^\/]+)(?:\/.)?/', $code, $aircraft);
-		return $aircraft[1];
+		// For properly formatted aircraft codes
+		if (substr_count($code, '/') == 2) {
+			preg_match('/(?:.\/)?([^\/]+)(?:\/.)?/', $code, $aircraft);
+			return $aircraft[1];
+		} else {
+			preg_match('/?([^\/]+)(?:\/.)?/', $code, $aircraft);
+			return $aircraft[0];
+		}
 	}
 
 	/**
